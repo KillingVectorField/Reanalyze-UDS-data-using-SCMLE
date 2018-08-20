@@ -53,6 +53,7 @@ summary(MOCATOTS.lm <- lm(MOCATOTS ~ SEX + NACCAGE + EDUC, data = NACC.NORM, sub
 car::residualPlots(MOCATOTS.lm) # curvature tests rejected: the relationships between Y and EDUC and AGE are not linear. So linear model is not good enough.
 
 # CRAFTVRS
+CRAFTVRS.index <- (CRAFTVRS >= 0) & (CRAFTVRS <= 44)
 by(CRAFTVRS[CRAFTVRS.index], SEX[CRAFTVRS.index], hist)
 plot(sort(unique(NACCAGE[CRAFTVRS.index])), by(CRAFTVRS[CRAFTVRS.index], NACCAGE[CRAFTVRS.index], mean)) # the shape looks like decreasing and concave
 plot(sort(unique(EDUC[CRAFTVRS.index])), by(CRAFTVRS[CRAFTVRS.index], EDUC[CRAFTVRS.index], mean)) # the shape looks like increasing
@@ -81,29 +82,48 @@ MOCATOTS.scar$deviance # 26239.2
 
 # -----------------------
 # Test set results
-require(caret)
-NACC.NORM.valid <- NACC.NORM[MOCATOTS.index,]
-set.seed(3)
-trainingRows <- createDataPartition(NACC.NORM.valid$MOCATOTS, p = .70)[[1]] # 3133
-cat("training set:", length(trainingRows), "\n")
-cat("test set:", nrow(NACC.NORM.valid) - length(trainingRows), "\n")
-# OLS
-model.lm <- lm(MOCATOTS ~ SEX + NACCAGE + EDUC, data = NACC.NORM.valid, subset = trainingRows)
-pred.lm <- predict(model.lm, newdata = NACC.NORM.valid[-trainingRows,])
-# gam
-model.gam <- gam(MOCATOTS ~ SEX + s(NACCAGE) + s(EDUC), data = NACC.NORM.valid, subset = trainingRows)
-pred.gam <- predict(model.gam, newdata = NACC.NORM.valid[-trainingRows,])
-# scam
-model.scam.1 <- scam(MOCATOTS ~ SEX + s(NACCAGE, bs = "mpd", m = 2) + s(EDUC, bs = "mpi", m = 2), data = NACC.NORM.valid[trainingRows,])
-pred.scam.1 <- predict(model.scam.1, newdata = NACC.NORM.valid[-trainingRows,])
-model.scam.2 <- scam(MOCATOTS ~ SEX + s(NACCAGE, bs = "mdcv", m = 2) + s(EDUC, bs = "mpi", m = 2), data = NACC.NORM.valid[trainingRows,])
-pred.scam.2 <- predict(model.scam.2, newdata = NACC.NORM.valid[-trainingRows,])
-# scmle
-model.scar <- scar(x = as.matrix(NACC.NORM.valid[trainingRows, c('SEX', 'NACCAGE', 'EDUC')]), y = NACC.NORM.valid$MOCATOTS[trainingRows], shape = c("l", "ccvde", "ccvin"))
-pred.scar <- predict(model.scar, newdata = as.matrix(NACC.NORM.valid[-trainingRows, c('SEX', 'NACCAGE', 'EDUC')]))
+test <- function(outcome = "MOCATOTS", valid.index = MOCATOTS.index, k = 10) {
+    require(caret)
+    NACC.NORM.valid <- NACC.NORM[valid.index,]
+    set.seed(3)
+    #trainingRows <- createDataPartition(NACC.NORM.valid$MOCATOTS, p = .70)[[1]] # 3133
+    #cat("training set:", length(trainingRows), "\n")
+    #cat("test set:", nrow(NACC.NORM.valid) - length(trainingRows), "\n")
+    cvSplits <- createFolds(NACC.NORM.valid$MOCATOTS, k = k, returnTrain = TRUE)
+    pred.lm <- pred.gam <- pred.scam.1 <- pred.scam.2 <- pred.scar.1 <- pred.scar.2 <- rep(0, length(NACC.NORM.valid$MOCATOTS))
+    for (trainingRows in cvSplits) {
+        # OLS
+        formu <- as.formula(paste(outcome, "~ SEX + NACCAGE + EDUC"))
+        model.lm <- lm(formu, data = NACC.NORM.valid, subset = trainingRows)
+        pred.lm[-trainingRows] <- predict(model.lm, newdata = NACC.NORM.valid[-trainingRows,])
+        # gam
+        formu <- as.formula(paste(outcome, "~ SEX + s(NACCAGE) + s(EDUC)"))
+        model.gam <- gam(formu, data = NACC.NORM.valid, subset = trainingRows)
+        pred.gam[-trainingRows] <- predict(model.gam, newdata = NACC.NORM.valid[-trainingRows,])
+        # scam
+        formu <- as.formula(paste(outcome, '~ SEX + s(NACCAGE, bs = "mpd", m = 2) + s(EDUC, bs = "mpi", m = 2)'))
+        model.scam.1 <- scam(formu, data = NACC.NORM.valid[trainingRows,])
+        pred.scam.1[-trainingRows] <- predict(model.scam.1, newdata = NACC.NORM.valid[-trainingRows,])
+        formu <- as.formula(paste(outcome, '~ SEX + s(NACCAGE, bs = "mdcv", m = 2) + s(EDUC, bs = "mpi", m = 2)'))
+        model.scam.2 <- scam(formu, data = NACC.NORM.valid[trainingRows,])
+        pred.scam.2[-trainingRows] <- predict(model.scam.2, newdata = NACC.NORM.valid[-trainingRows,])
+        # scmle
+        #model.scar.1 <- scar(x = as.matrix(NACC.NORM.valid[trainingRows, c('SEX', 'NACCAGE', 'EDUC')]), y = NACC.NORM.valid$MOCATOTS[trainingRows], shape = c("l", "de", "in"))
+        #pred.scar.1[-trainingRows] <- predict(model.scar.1, newdata = as.matrix(NACC.NORM.valid[-trainingRows, c('SEX', 'NACCAGE', 'EDUC')]))
+        model.scar.2 <- scar(x = as.matrix(NACC.NORM.valid[trainingRows, c('SEX', 'NACCAGE', 'EDUC')]), y = NACC.NORM.valid[trainingRows, outcome], shape = c("l", "ccvde", "ccvin"))
+        pred.scar.2[-trainingRows] <- predict(model.scar.2, newdata = as.matrix(NACC.NORM.valid[-trainingRows, c('SEX', 'NACCAGE', 'EDUC')]))
+    }
 
-print(MSE.lm <- mean((NACC.NORM.valid$MOCATOTS[-trainingRows] - pred.lm) ^ 2))
-print(MSE.gam <- mean((NACC.NORM.valid$MOCATOTS[-trainingRows] - pred.gam) ^ 2))
-print(MSE.scam.1 <- mean((NACC.NORM.valid$MOCATOTS[-trainingRows] - pred.scam.1) ^ 2))
-print(MSE.scam.2 <- mean((NACC.NORM.valid$MOCATOTS[-trainingRows] - pred.scam.2) ^ 2))
-print(MSE.scar <- mean((NACC.NORM.valid$MOCATOTS[-trainingRows] - pred.scar) ^ 2))
+
+    MSE.lm <- mean((NACC.NORM.valid[, outcome] - pred.lm) ^ 2)
+    MSE.gam <- mean((NACC.NORM.valid[, outcome] - pred.gam) ^ 2)
+    MSE.scam.1 <- mean((NACC.NORM.valid[, outcome] - pred.scam.1) ^ 2)
+    MSE.scam.2 <- mean((NACC.NORM.valid[, outcome] - pred.scam.2) ^ 2)
+    #MSE.scar.1 <- mean((NACC.NORM.valid[,outcome] - pred.scar.1) ^ 2)
+    MSE.scar.2 <- mean((NACC.NORM.valid[, outcome] - pred.scar.2) ^ 2)
+
+    return(c(MSE.lm = MSE.lm, MSE.gam = MSE.gam, MSE.scam.1 = MSE.scam.1, MSE.scam.2 = MSE.scam.2, MSE.scar.2 = MSE.scar.2))
+}
+
+test("MOCATOTS", MOCATOTS.index)
+test("CRAFTVRS", CRAFTVRS.index)
