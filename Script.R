@@ -36,47 +36,63 @@ by(NACC.NORM$EDUC, SEX, hist)
 
 # MOCA total scores MOCATOTS
 # not available when MOCATOTS == 88 | MOCATOTS == -4
-MOCATOTS.index <- (MOCATOTS >= 0) & (MOCATOTS <= 30) # 4474
-summary(MOCATOTS[MOCATOTS.index])
-sd(MOCATOTS[MOCATOTS.index])
-MOCATOTS.NORM <- hist(MOCATOTS[MOCATOTS.index], 20, xlim = c(0, 30)) #skewed
+outcome <- "MOCATOTS"
+lower.outcome <- 0
+upper.outcome <- 30
+
+# CRAFTVRS
+outcome <- "CRAFTVRS"
+lower.outcome <- 0
+upper.outcome <- 44
+
+outcome.index <- (NACC.NORM[outcome] >= lower.outcome) & (NACC.NORM[outcome] <= upper.outcome) # 4474
+summary(NACC.NORM[outcome.index, outcome])
+sd(NACC.NORM[outcome.index, outcome])
+outcome.NORM <- hist(NACC.NORM[outcome.index, outcome], 20, xlim = c(lower.outcome, upper.outcome)) #skewed
 
 
 # Multivariate Linear Regression
-# MOCATOTS
-by(MOCATOTS[MOCATOTS.index], SEX[MOCATOTS.index], hist)
-plot(sort(unique(NACCAGE[MOCATOTS.index])), by(MOCATOTS[MOCATOTS.index], NACCAGE[MOCATOTS.index], mean)) # the shape looks like decreasing and concave
-plot(sort(unique(EDUC[MOCATOTS.index])), by(MOCATOTS[MOCATOTS.index], EDUC[MOCATOTS.index], mean)) # the shape looks like increasing and concave
-summary(MOCATOTS.lm <- lm(MOCATOTS ~ SEX + NACCAGE + EDUC, data = NACC.NORM, subset = MOCATOTS.index)) # SEX, AGE, EDUC all significant
+by(NACC.NORM[outcome.index, outcome], NACC.NORM[outcome.index, 'SEX'], hist)
+plot(sort(unique(NACC.NORM[outcome.index, 'NACCAGE'])), by(NACC.NORM[outcome.index, outcome], NACC.NORM[outcome.index, 'NACCAGE'], mean)) # the shape looks like decreasing and concave
+plot(sort(unique(NACC.NORM[outcome.index, 'EDUC'])), by(NACC.NORM[outcome.index, outcome], NACC.NORM[outcome.index, 'EDUC'], mean)) # the shape looks like increasing and concave
+summary(outcome.lm <- lm(as.formula(paste(outcome, "~ SEX + NACCAGE + EDUC")), data = NACC.NORM, subset = outcome.index)) # SEX, AGE, EDUC all significant
 
 # Diagnosis of residuals of the linear model
-car::residualPlots(MOCATOTS.lm) # curvature tests rejected: the relationships between Y and EDUC and AGE are not linear. So linear model is not good enough.
-
-# CRAFTVRS
-CRAFTVRS.index <- (CRAFTVRS >= 0) & (CRAFTVRS <= 44)
-by(CRAFTVRS[CRAFTVRS.index], SEX[CRAFTVRS.index], hist)
-plot(sort(unique(NACCAGE[CRAFTVRS.index])), by(CRAFTVRS[CRAFTVRS.index], NACCAGE[CRAFTVRS.index], mean)) # the shape looks like decreasing and concave
-plot(sort(unique(EDUC[CRAFTVRS.index])), by(CRAFTVRS[CRAFTVRS.index], EDUC[CRAFTVRS.index], mean)) # the shape looks like increasing
-summary(CRAFTVRS.lm <- lm(CRAFTVRS ~ SEX + NACCAGE + EDUC, data = NACC.NORM, subset = CRAFTVRS.index)) # SEX, AGE, EDUC all significant
-
-# Diagnosis
-car::residualPlots(CRAFTVRS.lm) # curvature tests
+car::residualPlots(outcome.lm) # curvature tests rejected: the relationships between Y and EDUC and AGE are not linear. So linear model is not good enough.
 
 # ordinary GAM (without shape constraint)
 require(scam)
-summary(MOCATOTS.gam <- gam(MOCATOTS ~ SEX + s(NACCAGE) + s(EDUC), data = NACC.NORM, subset = MOCATOTS.index)) # GCV=5.8794, aic=20624.09, deviance=26104.58
-plot.gam(MOCATOTS.gam)
+summary(outcome.gam <- gam(as.formula(paste(outcome, "~ SEX + s(NACCAGE) + s(EDUC)")), data = NACC.NORM, subset = outcome.index)) # GCV=5.8794, aic=20624.09, deviance=26104.58
+plot(outcome.gam)
+hist(residuals(outcome.gam))
+residualPlot(outcome.gam)
+
 # SCAM by Simon N. Wood 
-summary(MOCATOTS.scam <- scam(MOCATOTS ~ SEX + s(NACCAGE, bs = "mpd", m = 2) + s(EDUC, bs = "mpi", m = 2), data = NACC.NORM[MOCATOTS.index,])) # GCV=5.8815, aic=20625.75, deviance=26190.94
-plot.scam(MOCATOTS.scam)
-summary(MOCATOTS.scam <- scam(MOCATOTS ~ SEX + s(NACCAGE, bs = "mdcv", m = 2) + s(EDUC, bs = "mpi", m = 2), data = NACC.NORM[MOCATOTS.index,])) # GCV=5.8925, aic=20634.09, deviance=26284.95
-plot.scam(MOCATOTS.scam)
+summary(outcome.scam.1 <- scam(as.formula(paste(outcome, ' ~ SEX + s(NACCAGE, bs = "mpd", m = 2) + s(EDUC, bs = "mpi", m = 2)')), data = NACC.NORM[outcome.index,])) # GCV=5.8815, aic=20625.75, deviance=26190.94
+plot(outcome.scam.1)
+hist(residuals(outcome.scam.1))
+residualPlot(outcome.scam.1)
+
+summary(outcome.scam.2 <- scam(as.formula(paste(outcome, '~ SEX + s(NACCAGE, bs = "mdcv", m = 2) + s(EDUC, bs = "mpi", m = 2)')), data = NACC.NORM[outcome.index,])) # GCV=5.8925, aic=20634.09, deviance=26284.95
+plot(outcome.scam.2)
+hist(residuals(outcome.scam.2))
+residualPlot(outcome.scam.2)
+
 # SCMLE by J. Samworth
 require(scar)
-plot(MOCATOTS.scar <- scar(x = as.matrix(NACC.NORM[MOCATOTS.index, c('SEX', 'NACCAGE', 'EDUC')]), y = NACC.NORM$MOCATOTS[MOCATOTS.index], shape = c("l", "de", "in")))
-MOCATOTS.scar$deviance # 27201.81
-plot(MOCATOTS.scar <- scar(x = as.matrix(NACC.NORM[MOCATOTS.index, c('SEX', 'NACCAGE', 'EDUC')]), y = NACC.NORM$MOCATOTS[MOCATOTS.index], shape = c("l", "ccvde", "ccvin")))
-MOCATOTS.scar$deviance # 26239.2
+plot(outcome.scar.1 <- scar(x = as.matrix(NACC.NORM[outcome.index, c('SEX', 'NACCAGE', 'EDUC')]), y = NACC.NORM[outcome.index, outcome], shape = c("l", "de", "in")))
+outcome.scar.1$deviance # 27201.81
+fitted.scar.1 <- predict(outcome.scar.1, newdata = as.matrix(NACC.NORM[outcome.index, c('SEX', 'NACCAGE', 'EDUC')]))
+residuals.scar.1 <- NACC.NORM[outcome.index, outcome] - fitted.scar.1
+hist(residuals.scar.1)
+plot(fitted.scar.1,residuals.scar.1)
+
+plot(outcome.scar.2 <- scar(x = as.matrix(NACC.NORM[outcome.index, c('SEX', 'NACCAGE', 'EDUC')]), y = NACC.NORM[outcome.index, outcome], shape = c("l", "ccvde", "ccvin")))
+outcome.scar.2$deviance # 26239.2
+fitted.scar.2 <- predict(outcome.scar.2, newdata = as.matrix(NACC.NORM[outcome.index, c('SEX', 'NACCAGE', 'EDUC')]))
+residuals.scar.2 <- NACC.NORM[outcome.index, outcome] - fitted.scar.2
+hist(residuals.scar.2)
+plot(fitted.scar.2, residuals.scar.2)
 
 
 
@@ -89,8 +105,8 @@ test <- function(outcome = "MOCATOTS", valid.index = MOCATOTS.index, k = 10) {
     #trainingRows <- createDataPartition(NACC.NORM.valid$MOCATOTS, p = .70)[[1]] # 3133
     #cat("training set:", length(trainingRows), "\n")
     #cat("test set:", nrow(NACC.NORM.valid) - length(trainingRows), "\n")
-    cvSplits <- createFolds(NACC.NORM.valid$MOCATOTS, k = k, returnTrain = TRUE)
-    pred.lm <- pred.gam <- pred.scam.1 <- pred.scam.2 <- pred.scar.1 <- pred.scar.2 <- rep(0, length(NACC.NORM.valid$MOCATOTS))
+    cvSplits <- createFolds(NACC.NORM.valid[outcome], k = k, returnTrain = TRUE)
+    pred.lm <- pred.gam <- pred.scam.1 <- pred.scam.2 <- pred.scar.1 <- pred.scar.2 <- rep(0, length(NACC.NORM.valid[outcome]))
     for (trainingRows in cvSplits) {
         # OLS
         formu <- as.formula(paste(outcome, "~ SEX + NACCAGE + EDUC"))
@@ -125,5 +141,5 @@ test <- function(outcome = "MOCATOTS", valid.index = MOCATOTS.index, k = 10) {
     return(c(MSE.lm = MSE.lm, MSE.gam = MSE.gam, MSE.scam.1 = MSE.scam.1, MSE.scam.2 = MSE.scam.2, MSE.scar.2 = MSE.scar.2))
 }
 
-test("MOCATOTS", MOCATOTS.index)
-test("CRAFTVRS", CRAFTVRS.index)
+#test("MOCATOTS", MOCATOTS.index)
+#test("CRAFTVRS", CRAFTVRS.index)
