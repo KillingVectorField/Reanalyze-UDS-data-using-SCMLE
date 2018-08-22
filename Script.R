@@ -105,8 +105,8 @@ test <- function(outcome = "MOCATOTS", valid.index = MOCATOTS.index, k = 10) {
     #trainingRows <- createDataPartition(NACC.NORM.valid$MOCATOTS, p = .70)[[1]] # 3133
     #cat("training set:", length(trainingRows), "\n")
     #cat("test set:", nrow(NACC.NORM.valid) - length(trainingRows), "\n")
-    cvSplits <- createFolds(NACC.NORM.valid[outcome], k = k, returnTrain = TRUE)
-    pred.lm <- pred.gam <- pred.scam.1 <- pred.scam.2 <- pred.scar.1 <- pred.scar.2 <- rep(0, length(NACC.NORM.valid[outcome]))
+    cvSplits <- createFolds(NACC.NORM.valid[,outcome], k = k, returnTrain = TRUE)
+    pred.lm <- pred.gam <- pred.scam.1 <- pred.scam.2 <- pred.scar.1 <- pred.scar.2 <- rep(0, length(NACC.NORM.valid[,outcome]))
     for (trainingRows in cvSplits) {
         # OLS
         formu <- as.formula(paste(outcome, "~ SEX + NACCAGE + EDUC"))
