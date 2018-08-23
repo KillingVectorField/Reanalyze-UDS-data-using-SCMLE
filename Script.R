@@ -8,6 +8,7 @@ summary(NACCAGE)
 table(SEX) # 2126 M, 2893 F
 table(RACE)
 table(NACCNORM) # Normal cognition at all visits to date; cross-sectional
+table(CDRGLOB)
 table(NACCUDSD) # Cognitive status at UDS visit; longitudinal
 table(EDUC) # Years of education; 99 means unknown
 detach(NACC.uniqueID)
@@ -15,8 +16,7 @@ detach(NACC.uniqueID)
 # --------------------------------------------
 # Normal Subgroup
 
-NACC.NORM <- NACC.uniqueID[(NACC.uniqueID$NACCNORM == 1)
-    & (NACC.uniqueID$CDRGLOB == 0),] # 5190
+NACC.NORM <- NACC.uniqueID[(NACC.uniqueID$NACCNORM == 1) & (NACC.uniqueID$CDRGLOB == 0),] # 5190
 hist(NACC.NORM$NACCAGE)
 # How to filter Age? Use 45 as the minimum Age?
 NACC.NORM <- NACC.NORM[NACC.NORM$NACCAGE >= 45,] # 5109
@@ -35,12 +35,12 @@ by(NACC.NORM$NACCAGE, SEX, hist)
 by(NACC.NORM$EDUC, SEX, hist)
 
 # MOCA total scores MOCATOTS
-# not available when MOCATOTS == 88 | MOCATOTS == -4
-outcome <- "MOCATOTS"
-lower.outcome <- 0
-upper.outcome <- 30
+# range from 0 to 30, not available when MOCATOTS == 88 | MOCATOTS == -4
+#outcome <- "MOCATOTS"
+#lower.outcome <- 0
+#upper.outcome <- 30
 
-# CRAFTVRS
+## CRAFTVRS
 outcome <- "CRAFTVRS"
 lower.outcome <- 0
 upper.outcome <- 44
@@ -57,26 +57,34 @@ plot(sort(unique(NACC.NORM[outcome.index, 'NACCAGE'])), by(NACC.NORM[outcome.ind
 plot(sort(unique(NACC.NORM[outcome.index, 'EDUC'])), by(NACC.NORM[outcome.index, outcome], NACC.NORM[outcome.index, 'EDUC'], mean)) # the shape looks like increasing and concave
 summary(outcome.lm <- lm(as.formula(paste(outcome, "~ SEX + NACCAGE + EDUC")), data = NACC.NORM, subset = outcome.index)) # SEX, AGE, EDUC all significant
 
-# Diagnosis of residuals of the linear model
+# Diagnosis of residuals
 car::residualPlots(outcome.lm) # curvature tests rejected: the relationships between Y and EDUC and AGE are not linear. So linear model is not good enough.
+plot(fitted.values(outcome.lm), residuals(outcome.lm) ^ 2)
 
 # ordinary GAM (without shape constraint)
 require(scam)
 summary(outcome.gam <- gam(as.formula(paste(outcome, "~ SEX + s(NACCAGE) + s(EDUC)")), data = NACC.NORM, subset = outcome.index)) # GCV=5.8794, aic=20624.09, deviance=26104.58
 plot(outcome.gam)
 hist(residuals(outcome.gam))
-residualPlot(outcome.gam)
+car::residualPlot(outcome.gam)
+plot(outcome.gam$fitted.values, outcome.gam$residuals ^ 2)
+plot(outcome.gam$model$NACCAGE, outcome.gam$residuals ^ 2)
+plot(outcome.gam$model$EDUC, outcome.gam$residuals ^ 2)
+plot(outcome.gam$fitted.values, abs(residuals(outcome.gam)))
 
-# SCAM by Simon N. Wood 
+# SCAM by Simon N. Wood
 summary(outcome.scam.1 <- scam(as.formula(paste(outcome, ' ~ SEX + s(NACCAGE, bs = "mpd", m = 2) + s(EDUC, bs = "mpi", m = 2)')), data = NACC.NORM[outcome.index,])) # GCV=5.8815, aic=20625.75, deviance=26190.94
 plot(outcome.scam.1)
 hist(residuals(outcome.scam.1))
-residualPlot(outcome.scam.1)
+car::residualPlot(outcome.scam.1)
+plot(outcome.scam.1$model$EDUC, residuals(outcome.scam.1) ^ 2)
+plot(fitted.values(outcome.scam.1), residuals(outcome.scam.1) ^ 2)
 
 summary(outcome.scam.2 <- scam(as.formula(paste(outcome, '~ SEX + s(NACCAGE, bs = "mdcv", m = 2) + s(EDUC, bs = "mpi", m = 2)')), data = NACC.NORM[outcome.index,])) # GCV=5.8925, aic=20634.09, deviance=26284.95
 plot(outcome.scam.2)
 hist(residuals(outcome.scam.2))
-residualPlot(outcome.scam.2)
+car::residualPlot(outcome.scam.2)
+plot(fitted.values(outcome.scam.2), residuals(outcome.scam.2) ^ 2)
 
 # SCMLE by J. Samworth
 require(scar)
@@ -85,7 +93,8 @@ outcome.scar.1$deviance # 27201.81
 fitted.scar.1 <- predict(outcome.scar.1, newdata = as.matrix(NACC.NORM[outcome.index, c('SEX', 'NACCAGE', 'EDUC')]))
 residuals.scar.1 <- NACC.NORM[outcome.index, outcome] - fitted.scar.1
 hist(residuals.scar.1)
-plot(fitted.scar.1,residuals.scar.1)
+plot(fitted.scar.1, residuals.scar.1)
+plot(fitted.scar.1, residuals.scar.1 ^ 2)
 
 plot(outcome.scar.2 <- scar(x = as.matrix(NACC.NORM[outcome.index, c('SEX', 'NACCAGE', 'EDUC')]), y = NACC.NORM[outcome.index, outcome], shape = c("l", "ccvde", "ccvin")))
 outcome.scar.2$deviance # 26239.2
@@ -93,20 +102,24 @@ fitted.scar.2 <- predict(outcome.scar.2, newdata = as.matrix(NACC.NORM[outcome.i
 residuals.scar.2 <- NACC.NORM[outcome.index, outcome] - fitted.scar.2
 hist(residuals.scar.2)
 plot(fitted.scar.2, residuals.scar.2)
+plot(fitted.scar.2, residuals.scar.2 ^ 2)
 
-
+##------include interatction?-------------
+#summary(outcome.gam.ia <- gam(as.formula(paste(outcome, '~ SEX + s(NACCAGE)+ s(NACCAGE, by = SEX) + s(EDUC)+ s(EDUC, by = SEX)')), data = NACC.NORM, subset = outcome.index)) # GCV=5.8794, aic=20624.09, deviance=26104.58
+#plot(outcome.gam.ia)
+#hist(residuals(outcome.gam))
+#residualPlot(outcome.gam)
 
 # -----------------------
 # Test set results
-test <- function(outcome = "MOCATOTS", valid.index = MOCATOTS.index, k = 10) {
-    require(caret)
+test <- function(outcome = outcome, valid.index = outcome.index, k = 10) {
     NACC.NORM.valid <- NACC.NORM[valid.index,]
     set.seed(3)
     #trainingRows <- createDataPartition(NACC.NORM.valid$MOCATOTS, p = .70)[[1]] # 3133
     #cat("training set:", length(trainingRows), "\n")
     #cat("test set:", nrow(NACC.NORM.valid) - length(trainingRows), "\n")
-    cvSplits <- createFolds(NACC.NORM.valid[,outcome], k = k, returnTrain = TRUE)
-    pred.lm <- pred.gam <- pred.scam.1 <- pred.scam.2 <- pred.scar.1 <- pred.scar.2 <- rep(0, length(NACC.NORM.valid[,outcome]))
+    cvSplits <- caret::createFolds(NACC.NORM.valid[, outcome], k = k, returnTrain = TRUE)
+    pred.lm <- pred.gam <- pred.scam.1 <- pred.scam.2 <- pred.scar.1 <- pred.scar.2 <- rep(0, length(NACC.NORM.valid[, outcome]))
     for (trainingRows in cvSplits) {
         # OLS
         formu <- as.formula(paste(outcome, "~ SEX + NACCAGE + EDUC"))
@@ -141,5 +154,55 @@ test <- function(outcome = "MOCATOTS", valid.index = MOCATOTS.index, k = 10) {
     return(c(MSE.lm = MSE.lm, MSE.gam = MSE.gam, MSE.scam.1 = MSE.scam.1, MSE.scam.2 = MSE.scam.2, MSE.scar.2 = MSE.scar.2))
 }
 
-#test("MOCATOTS", MOCATOTS.index)
-#test("CRAFTVRS", CRAFTVRS.index)
+#test(outcome, outcome.index)
+
+#-------------model of SD (heterogeneous SD)---------
+#scam
+outcome.model <- outcome.scam.1
+#summary(SD.model <- gam(res.abs ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.abs = abs(residuals(outcome.model)))))
+summary(SD.model <- scam(res.squared ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.squared = residuals(outcome.model) ^ 2))) # or squared residuals?
+#plot(SD.model)
+# when we use residuals from lm, the R-sq(adj) is 0.00917
+# when we use residuals from scam.1, the R-sq(adj) is 0.0046
+
+adjusted.SD <- function(SD.model, newdata) {
+    return(sqrt(predict(SD.model, newdata)))
+    #return(predict(SD.model, newdata))
+}
+
+# SD model test
+cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean(residuals(outcome.model) ^ 2)))#maybe this one is reasonable
+adjusted.SD(SD.model, newdata = data.frame(SEX = c(1, 0, 0), EDUC = c(30, 9, 20), NACCAGE = c(70, 65, 90)))
+
+# Note: We decide to temporarily use homogeneous SD.
+
+#-------Z-score----------------
+Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
+    return((newdata[, outcome] - predict(outcome.model, newdata[, c("SEX", "NACCAGE", "EDUC")])) / SD.naive)
+}
+
+# test
+Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.NORM[5:10,])
+
+NORM.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.NORM[outcome.index,]) #4472
+NORM.Z_score.hist <- hist(NORM.Z_score, 30, freq = FALSE)
+
+
+#-------------MCI-------------
+NACC.MCI <- NACC.uniqueID[NACC.uniqueID$NACCUDSD == 3,] # 1992
+NACC.MCI <- with(NACC.MCI, NACC.MCI[(NACCAGEB >= 45) & (EDUC != 99),]) #1960
+MCI.outcome.index <- (NACC.MCI[outcome] >= lower.outcome) & (NACC.MCI[outcome] <= upper.outcome)
+MCI.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.MCI[MCI.outcome.index,])
+MCI.Z_score.hist <- hist(MCI.Z_score, 30, freq = FALSE)
+
+#------------Dementia------------
+NACC.Dementia <- NACC.uniqueID[NACC.uniqueID$NACCUDSD == 4,] # 2898
+NACC.Dementia <- with(NACC.Dementia, NACC.Dementia[(NACCAGEB >= 45) & (EDUC != 99),]) #2832
+Dementia.outcome.index <- (NACC.Dementia[outcome] >= lower.outcome) & (NACC.Dementia[outcome] <= upper.outcome)
+Dementia.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.Dementia[Dementia.outcome.index,])
+Dementia.Z_score.hist <- hist(Dementia.Z_score, 30, freq = FALSE)
+
+#--------------Distribution Comparison---------
+plot(NORM.Z_score.hist, freq = FALSE, col = rgb(1, 0, 0, 1 / 4), xlim = c(-5, 5))
+plot(MCI.Z_score.hist, freq = FALSE, col = rgb(0, 1, 0, 1 / 4), add = TRUE)
+plot(Dementia.Z_score.hist, freq = FALSE, col = rgb(0, 0, 1, 1 / 4), add = TRUE)
