@@ -70,14 +70,12 @@ car::residualPlot(outcome.gam)
 plot(outcome.gam$fitted.values, outcome.gam$residuals ^ 2)
 plot(outcome.gam$model$NACCAGE, outcome.gam$residuals ^ 2)
 plot(outcome.gam$model$EDUC, outcome.gam$residuals ^ 2)
-plot(outcome.gam$fitted.values, abs(residuals(outcome.gam)))
 
 # SCAM by Simon N. Wood
 summary(outcome.scam.1 <- scam(as.formula(paste(outcome, ' ~ SEX + s(NACCAGE, bs = "mpd", m = 2) + s(EDUC, bs = "mpi", m = 2)')), data = NACC.NORM[outcome.index,])) # GCV=5.8815, aic=20625.75, deviance=26190.94
 plot(outcome.scam.1)
 hist(residuals(outcome.scam.1))
 car::residualPlot(outcome.scam.1)
-plot(outcome.scam.1$model$EDUC, residuals(outcome.scam.1) ^ 2)
 plot(fitted.values(outcome.scam.1), residuals(outcome.scam.1) ^ 2)
 
 summary(outcome.scam.2 <- scam(as.formula(paste(outcome, '~ SEX + s(NACCAGE, bs = "mdcv", m = 2) + s(EDUC, bs = "mpi", m = 2)')), data = NACC.NORM[outcome.index,])) # GCV=5.8925, aic=20634.09, deviance=26284.95
@@ -157,11 +155,10 @@ test <- function(outcome = outcome, valid.index = outcome.index, k = 10) {
 #test(outcome, outcome.index)
 
 #-------------model of SD (heterogeneous SD)---------
-#scam
 outcome.model <- outcome.scam.1
 #summary(SD.model <- gam(res.abs ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.abs = abs(residuals(outcome.model)))))
 summary(SD.model <- scam(res.squared ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.squared = residuals(outcome.model) ^ 2))) # or squared residuals?
-#plot(SD.model)
+plot(SD.model)
 # when we use residuals from lm, the R-sq(adj) is 0.00917
 # when we use residuals from scam.1, the R-sq(adj) is 0.0046
 
@@ -174,9 +171,8 @@ adjusted.SD <- function(SD.model, newdata) {
 cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean(residuals(outcome.model) ^ 2)))#maybe this one is reasonable
 adjusted.SD(SD.model, newdata = data.frame(SEX = c(1, 0, 0), EDUC = c(30, 9, 20), NACCAGE = c(70, 65, 90)))
 
-# Note: We decide to temporarily use homogeneous SD.
-
 #-------Z-score----------------
+# Note: We decide to temporarily use homogeneous SD.
 Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
     return((newdata[, outcome] - predict(outcome.model, newdata[, c("SEX", "NACCAGE", "EDUC")])) / SD.naive)
 }
@@ -206,3 +202,25 @@ Dementia.Z_score.hist <- hist(Dementia.Z_score, 30, freq = FALSE)
 plot(NORM.Z_score.hist, freq = FALSE, col = rgb(1, 0, 0, 1 / 4), xlim = c(-5, 5))
 plot(MCI.Z_score.hist, freq = FALSE, col = rgb(0, 1, 0, 1 / 4), add = TRUE)
 plot(Dementia.Z_score.hist, freq = FALSE, col = rgb(0, 0, 1, 1 / 4), add = TRUE)
+
+#----------labeled Z-score--------------
+labeled.Z_score <- data.frame(label = c(rep(1, length(NORM.Z_score)), rep(3, length(MCI.Z_score)), rep(4, length(Dementia.Z_score))), Z_score = c(NORM.Z_score, MCI.Z_score, Dementia.Z_score))
+# NORM:1, MCI:3, Dementia:4
+
+
+#-------Binary Classification: Norm Versus MCI---------
+ROC <- function(pos_label = 3, neg_label = 1) {
+    thres <- seq(-4, 4, length.out = 50)
+    onevsone.index <- (labeled.Z_score['label'] == pos_label) | (labeled.Z_score['label'] == neg_label)
+    TPR <- vapply(thres, function(thres) {
+        sum((labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == pos_label)
+    }, FUN.VALUE = 0)
+    FPR <- vapply(thres, function(thres) {
+        sum((labeled.Z_score[onevsone.index, 'label'] == neg_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == neg_label)
+    }, FUN.VALUE = 0)
+    plot(FPR, TPR, type = "l", main = paste("pos:", pos_label, "neg:", neg_label))
+}
+
+ROC(3, 1)
+ROC(4, 3)
+ROC(4, 1)
