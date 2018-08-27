@@ -166,7 +166,7 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
 
         # SD model test
         cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean(residuals(outcome.model) ^ 2)), '\n')
-        sqrt(predict(SD.model, newdata = data.frame(SEX = c(1, 0, 0), EDUC = c(30, 9, 20), NACCAGE = c(70, 65, 90))))
+        cat(sqrt(predict(SD.model, newdata = data.frame(SEX = c(1, 0, 0), EDUC = c(30, 9, 20), NACCAGE = c(70, 65, 90)))), '\n')
 
         #----------Z-score----------------
         # use SD model.
@@ -233,22 +233,14 @@ ROC <- function(labeled.Z_score.list, pos_label = 'MCI', neg_label = 'norm', leg
             plot(FPR, TPR, type = "l",col=i, main = paste("pos:", pos_label, "neg:", neg_label))
         }
         else {
-            points(FPR, TPR, type = "l", col = i)
+            points(FPR, TPR, type = "l", col = i, lty = 2)
         }
     }
-    legend("bottomright", leg.txt, col = 1:i, lty = rep(1, i))
+    legend("bottomright", leg.txt, col = 1:i, lty = rep(2, i))
 }
 
-ROC(list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE),
-    Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE),
-    Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE),
-    Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE)),
-    pos_label = 'MCI',
-    neg_label = 'norm',
-    leg.txt = c("monotone scam with naive SD",
-                "monotone scam with adjusted SD",
-                "lm with naive SD",
-                "lm with adjusted SD"))
+ROC(list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE), Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE)), pos_label = 'MCI', neg_label = 'norm', leg.txt = c("monotone scam with naive SD", "monotone scam with adjusted SD", "lm with naive SD", "lm with adjusted SD"))
 
+ROC(list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE), Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE)), pos_label = 'dementia', neg_label = 'MCI', leg.txt = c("monotone scam with naive SD", "monotone scam with adjusted SD", "lm with naive SD", "lm with adjusted SD"))
 
 #ROC(4, 3)
