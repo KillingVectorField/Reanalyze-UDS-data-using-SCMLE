@@ -154,73 +154,89 @@ test <- function(outcome = outcome, valid.index = outcome.index, k = 10) {
 
 #test(outcome, outcome.index)
 
-#-------------model of SD (heterogeneous SD)---------
-outcome.model <- outcome.scam.1
-#summary(SD.model <- gam(res.abs ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.abs = abs(residuals(outcome.model)))))
-summary(SD.model <- scam(res.squared ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.squared = residuals(outcome.model) ^ 2))) # or squared residuals?
-plot(SD.model)
-# when we use residuals from lm, the R-sq(adj) is 0.00917
-# when we use residuals from scam.1, the R-sq(adj) is 0.0046
+#-------------Z-score comparison-----------------------
+Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome, hist = TRUE) {
+    #-------------model of SD (heterogeneous SD)---------
+    #summary(SD.model <- gam(res.abs ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.abs = abs(residuals(outcome.model)))))
+    #summary(SD.model <- scam(res.squared ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.squared = residuals(outcome.model) ^ 2))) # or squared residuals?
+    #plot(SD.model)
+    # when we use residuals from lm, the R-sq(adj) is 0.00917
+    # when we use residuals from scam.1, the R-sq(adj) is 0.0046
 
-adjusted.SD <- function(SD.model, newdata) {
-    return(sqrt(predict(SD.model, newdata)))
-    #return(predict(SD.model, newdata))
+    #adjusted.SD <- function(SD.model, newdata) {
+        #return(sqrt(predict(SD.model, newdata)))
+        ##return(predict(SD.model, newdata))
+    #}
+
+    # SD model test
+    cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean(residuals(outcome.model) ^ 2)), '\n') #maybe this one is reasonable
+    #adjusted.SD(SD.model, newdata = data.frame(SEX = c(1, 0, 0), EDUC = c(30, 9, 20), NACCAGE = c(70, 65, 90)))
+
+    #-------Z-score----------------
+    # Note: We decide to temporarily use homogeneous SD.
+    Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
+        return((newdata[, outcome] - predict(outcome.model, newdata[, c("SEX", "NACCAGE", "EDUC")])) / SD.naive)
+    }
+
+    # test
+    Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.NORM[5:10,])
+
+    NORM.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.NORM[outcome.index,]) #4472
+
+    #-------------MCI-------------
+    NACC.MCI <- NACC.uniqueID[NACC.uniqueID$NACCUDSD == 3,] # 1992
+    NACC.MCI <- with(NACC.MCI, NACC.MCI[(NACCAGEB >= 45) & (EDUC != 99),]) #1960
+    MCI.outcome.index <- (NACC.MCI[outcome] >= lower.outcome) & (NACC.MCI[outcome] <= upper.outcome)
+    MCI.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.MCI[MCI.outcome.index,])
+
+    #------------Dementia------------
+    NACC.Dementia <- NACC.uniqueID[NACC.uniqueID$NACCUDSD == 4,] # 2898
+    NACC.Dementia <- with(NACC.Dementia, NACC.Dementia[(NACCAGEB >= 45) & (EDUC != 99),]) #2832
+    Dementia.outcome.index <- (NACC.Dementia[outcome] >= lower.outcome) & (NACC.Dementia[outcome] <= upper.outcome)
+    Dementia.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.Dementia[Dementia.outcome.index,])
+    
+
+    #--------------Distribution Comparison---------
+    if (hist) {
+        NORM.Z_score.hist <- hist(NORM.Z_score, 30, freq = FALSE)
+        MCI.Z_score.hist <- hist(MCI.Z_score, 30, freq = FALSE)
+        Dementia.Z_score.hist <- hist(Dementia.Z_score, 30, freq = FALSE)
+        plot(NORM.Z_score.hist, freq = FALSE, col = rgb(1, 0, 0, 1 / 4), xlim = c(-5, 5))
+        plot(MCI.Z_score.hist, freq = FALSE, col = rgb(0, 1, 0, 1 / 4), add = TRUE)
+        plot(Dementia.Z_score.hist, freq = FALSE, col = rgb(0, 0, 1, 1 / 4), add = TRUE)
+    }
+
+    #----------labeled Z-score--------------
+    labeled.Z_score <- data.frame(label = c(rep('norm', length(NORM.Z_score)), rep('MCI', length(MCI.Z_score)), rep('dementia', length(Dementia.Z_score))), Z_score = c(NORM.Z_score, MCI.Z_score, Dementia.Z_score))
+    return(labeled.Z_score)
 }
 
-# SD model test
-cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean(residuals(outcome.model) ^ 2)))#maybe this one is reasonable
-adjusted.SD(SD.model, newdata = data.frame(SEX = c(1, 0, 0), EDUC = c(30, 9, 20), NACCAGE = c(70, 65, 90)))
-
-#-------Z-score----------------
-# Note: We decide to temporarily use homogeneous SD.
-Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
-    return((newdata[, outcome] - predict(outcome.model, newdata[, c("SEX", "NACCAGE", "EDUC")])) / SD.naive)
+#-------Binary Classification: ROC---------
+ROC <- function(labeled.Z_score.list, pos_label = 'MCI', neg_label = 'norm', leg.txt = c("monotone scam", "lm")) {
+    i <- 0
+    for (labeled.Z_score in labeled.Z_score.list) {
+        i <- i + 1
+        thres <- seq(-4, 4, length.out = 50)
+        onevsone.index <- (labeled.Z_score['label'] == pos_label) | (labeled.Z_score['label'] == neg_label)
+        TPR <- vapply(thres, function(thres) {
+            sum((labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == pos_label)
+        }, FUN.VALUE = 0)
+        FPR <- vapply(thres, function(thres) {
+            sum((labeled.Z_score[onevsone.index, 'label'] == neg_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == neg_label)
+        }, FUN.VALUE = 0)
+        if (i == 1) {
+            plot(FPR, TPR, type = "l",col=i, main = paste("pos:", pos_label, "neg:", neg_label))
+        }
+        else {
+            points(FPR, TPR, type = "l", col = i)
+        }
+    }
+    legend("bottomright", leg.txt, col = 1:i, lty = rep(1, i))
 }
 
-# test
-Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.NORM[5:10,])
-
-NORM.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.NORM[outcome.index,]) #4472
-NORM.Z_score.hist <- hist(NORM.Z_score, 30, freq = FALSE)
+ROC(list(Z_score.comparison(outcome.scam.1, outcome),
+    Z_score.comparison(outcome.lm, outcome, hist = FALSE))
+    , 'MCI', 'norm')
 
 
-#-------------MCI-------------
-NACC.MCI <- NACC.uniqueID[NACC.uniqueID$NACCUDSD == 3,] # 1992
-NACC.MCI <- with(NACC.MCI, NACC.MCI[(NACCAGEB >= 45) & (EDUC != 99),]) #1960
-MCI.outcome.index <- (NACC.MCI[outcome] >= lower.outcome) & (NACC.MCI[outcome] <= upper.outcome)
-MCI.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.MCI[MCI.outcome.index,])
-MCI.Z_score.hist <- hist(MCI.Z_score, 30, freq = FALSE)
-
-#------------Dementia------------
-NACC.Dementia <- NACC.uniqueID[NACC.uniqueID$NACCUDSD == 4,] # 2898
-NACC.Dementia <- with(NACC.Dementia, NACC.Dementia[(NACCAGEB >= 45) & (EDUC != 99),]) #2832
-Dementia.outcome.index <- (NACC.Dementia[outcome] >= lower.outcome) & (NACC.Dementia[outcome] <= upper.outcome)
-Dementia.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.Dementia[Dementia.outcome.index,])
-Dementia.Z_score.hist <- hist(Dementia.Z_score, 30, freq = FALSE)
-
-#--------------Distribution Comparison---------
-plot(NORM.Z_score.hist, freq = FALSE, col = rgb(1, 0, 0, 1 / 4), xlim = c(-5, 5))
-plot(MCI.Z_score.hist, freq = FALSE, col = rgb(0, 1, 0, 1 / 4), add = TRUE)
-plot(Dementia.Z_score.hist, freq = FALSE, col = rgb(0, 0, 1, 1 / 4), add = TRUE)
-
-#----------labeled Z-score--------------
-labeled.Z_score <- data.frame(label = c(rep(1, length(NORM.Z_score)), rep(3, length(MCI.Z_score)), rep(4, length(Dementia.Z_score))), Z_score = c(NORM.Z_score, MCI.Z_score, Dementia.Z_score))
-# NORM:1, MCI:3, Dementia:4
-
-
-#-------Binary Classification: Norm Versus MCI---------
-ROC <- function(pos_label = 3, neg_label = 1) {
-    thres <- seq(-4, 4, length.out = 50)
-    onevsone.index <- (labeled.Z_score['label'] == pos_label) | (labeled.Z_score['label'] == neg_label)
-    TPR <- vapply(thres, function(thres) {
-        sum((labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == pos_label)
-    }, FUN.VALUE = 0)
-    FPR <- vapply(thres, function(thres) {
-        sum((labeled.Z_score[onevsone.index, 'label'] == neg_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == neg_label)
-    }, FUN.VALUE = 0)
-    plot(FPR, TPR, type = "l", main = paste("pos:", pos_label, "neg:", neg_label))
-}
-
-ROC(3, 1)
-ROC(4, 3)
-ROC(4, 1)
+#ROC(4, 3)
