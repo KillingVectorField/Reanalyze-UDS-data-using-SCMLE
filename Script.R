@@ -280,6 +280,16 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
     abline(a = 0, b = 1)
     legend('bottomright', c('NORM', 'MCI'), lty = rep(1, 2), col = c(1, 2))
 
+    plot(((c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome]) - mean.naive) / SD.naive)[error.index],
+         (labeled.Z_score$Z_score[(labeled.Z_score$label == "norm") | (labeled.Z_score$label == "MCI")])[error.index],
+         col = (c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score))))[error.index],
+         pch = 2,
+         xlab = "naive Z-score (without adjustment, equiv to raw score)",
+         ylab = "adjusted Z-score",
+         main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
+    abline(a = 0, b = 1)
+    legend('bottomright', c('NORM', 'MCI'), lty = rep(1, 2), col = c(1, 2))
+
     return(labeled.Z_score)
 }
 
