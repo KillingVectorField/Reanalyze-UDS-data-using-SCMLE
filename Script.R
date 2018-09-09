@@ -253,10 +253,23 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
     labeled.Z_score <- data.frame(label = c(rep('norm', length(NORM.Z_score)), rep('MCI', length(MCI.Z_score)), rep('dementia', length(Dementia.Z_score))), Z_score = c(NORM.Z_score, MCI.Z_score, Dementia.Z_score))
 
     #----------Z-score versus raw score-------------
+    x <- (c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome], NACC.Dementia[Dementia.outcome.index, outcome]) - mean.naive) / SD.naive
+    y <- labeled.Z_score$Z_score
     #----------colored according to different (NORM/MCI/dementia) group----------
-    plot((c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome], NACC.Dementia[Dementia.outcome.index, outcome]) - mean.naive) / SD.naive,
-         labeled.Z_score$Z_score,
-         col = c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score)), rep(3, length(Dementia.Z_score))),
+    #col <- c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score)), rep(3, length(Dementia.Z_score)))
+    col <- c(rgb(0, 0, 0, alpha = NACC.NORM[outcome.index, "EDUC"] / 22),
+             rgb(1, 0, 0, alpha = NACC.MCI[MCI.outcome.index, "EDUC"] / 22),
+             rgb(0, 1, 0, alpha = NACC.Dementia[Dementia.outcome.index, "EDUC"] / 22))
+    #----------point size according to age----------
+    cex <- rep(1, length(NORM.Z_score) + length(MCI.Z_score) + length(Dementia.Z_score))
+    cex[1:(length(NORM.Z_score))] <- NACC.NORM[outcome.index, "NACCAGE"] / 70
+    cex[(length(NORM.Z_score)+1):(length(NORM.Z_score)+length(MCI.Z_score))] <- NACC.MCI[MCI.outcome.index, "NACCAGE"] / 70
+    cex[(length(NORM.Z_score) + length(MCI.Z_score) + 1):length(cex)] <- NACC.Dementia[Dementia.outcome.index, "NACCAGE"] / 70
+
+    plot(x,
+         y,
+         col = col,
+         cex = cex,
          xlab = "naive Z-score (without adjustment, equiv to raw score)",
          ylab = "adjusted Z-score",
          main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
@@ -269,27 +282,25 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
     error.index <- ((labeled.Z_score$label == "norm") & (labeled.Z_score$Z_score < thres)) | ((labeled.Z_score$label == "MCI") & (labeled.Z_score$Z_score > thres))
     cat("error rate:", sum(error.index) / (length(NORM.Z_score) + length(MCI.Z_score)), '\n')
     pch[error.index] <- 2 # denote wrong classifications as pch=2
-    #----------point size according to age----------
-    cex <- rep(1, length(NORM.Z_score) + length(MCI.Z_score))
-    cex[1:(length(NORM.Z_score))] <- NACC.NORM[outcome.index, "NACCAGE"] / 70
-    cex[-(1:(length(NORM.Z_score)))] <- NACC.MCI[MCI.outcome.index, "NACCAGE"] / 70
+    
+    NORM.and.MCI <- 1:(length(NORM.Z_score) + length(MCI.Z_score))
 
-    plot((c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome]) - mean.naive) / SD.naive,
-         labeled.Z_score$Z_score[(labeled.Z_score$label == "norm") | (labeled.Z_score$label == "MCI")],
-         col = c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score))),
+    plot(x[NORM.and.MCI],
+         y[NORM.and.MCI],
+         col = col[NORM.and.MCI],
          pch = pch,
-         cex = cex,
+         cex = cex[NORM.and.MCI],
          xlab = "naive Z-score (without adjustment, equiv to raw score)",
          ylab = "adjusted Z-score",
          main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
     abline(a = 0, b = 1)
     legend('bottomright', c('NORM', 'MCI'), lty = rep(1, 2), col = c(1, 2))
 
-    plot(((c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome]) - mean.naive) / SD.naive)[error.index],
-         (labeled.Z_score$Z_score[(labeled.Z_score$label == "norm") | (labeled.Z_score$label == "MCI")])[error.index],
-         col = (c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score))))[error.index],
+    plot((x[NORM.and.MCI])[error.index],
+         (y[NORM.and.MCI])[error.index],
+         col = (col[NORM.and.MCI])[error.index],
          pch = 2,
-         cex = cex[error.index],
+         cex = (cex[NORM.and.MCI])[error.index],
          xlab = "naive Z-score (without adjustment, equiv to raw score)",
          ylab = "adjusted Z-score",
          main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
