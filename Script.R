@@ -266,14 +266,19 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
     #----------shaped (pch) according to correct/wrong classification---------
     thres <- (median(NORM.Z_score) + median(MCI.Z_score)) / 2
     pch <- rep(1, length(NORM.Z_score) + length(MCI.Z_score))
-    # denote wrong classifications as pch=2
     error.index <- ((labeled.Z_score$label == "norm") & (labeled.Z_score$Z_score < thres)) | ((labeled.Z_score$label == "MCI") & (labeled.Z_score$Z_score > thres))
     cat("error rate:", sum(error.index) / (length(NORM.Z_score) + length(MCI.Z_score)), '\n')
-    pch[error.index] <- 2
+    pch[error.index] <- 2 # denote wrong classifications as pch=2
+    #----------point size according to age----------
+    cex <- rep(1, length(NORM.Z_score) + length(MCI.Z_score))
+    cex[1:(length(NORM.Z_score))] <- NACC.NORM[outcome.index, "NACCAGE"] / 70
+    cex[-(1:(length(NORM.Z_score)))] <- NACC.MCI[MCI.outcome.index, "NACCAGE"] / 70
+
     plot((c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome]) - mean.naive) / SD.naive,
          labeled.Z_score$Z_score[(labeled.Z_score$label == "norm") | (labeled.Z_score$label == "MCI")],
          col = c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score))),
          pch = pch,
+         cex = cex,
          xlab = "naive Z-score (without adjustment, equiv to raw score)",
          ylab = "adjusted Z-score",
          main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
@@ -284,6 +289,7 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
          (labeled.Z_score$Z_score[(labeled.Z_score$label == "norm") | (labeled.Z_score$label == "MCI")])[error.index],
          col = (c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score))))[error.index],
          pch = 2,
+         cex = cex[error.index],
          xlab = "naive Z-score (without adjustment, equiv to raw score)",
          ylab = "adjusted Z-score",
          main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
