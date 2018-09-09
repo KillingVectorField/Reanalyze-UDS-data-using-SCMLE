@@ -13,6 +13,19 @@ table(NACCUDSD) # Cognitive status at UDS visit; longitudinal
 table(EDUC) # Years of education; 99 means unknown
 detach(NACC.uniqueID)
 
+truncated <- TRUE
+
+NACC.uniqueID <- NACC.uniqueID[NACC.uniqueID$EDUC != 99,]
+
+if (truncated) {
+    NACC.uniqueID[NACC.uniqueID$NACCAGE < 45, 'NACCAGE'] <- 45
+    NACC.uniqueID[NACC.uniqueID$NACCAGE > 100, 'NACCAGE'] <- 100
+    NACC.uniqueID[NACC.uniqueID$EDUC < 8, "EDUC"] <- 8
+    NACC.uniqueID[NACC.uniqueID$EDUC > 22, "EDUC"] <- 22
+}
+
+
+
 # --------------------------------------------
 # Normal Subgroup
 
@@ -24,7 +37,7 @@ summary(NACC.NORM$NACCAGE)
 table(NACC.NORM$SEX)
 table(NACC.NORM$RACE)
 table(NACC.NORM$EDUC) # 35 with EDUC==99
-NACC.NORM <- NACC.NORM[NACC.NORM$EDUC != 99,] # 5074
+#NACC.NORM <- NACC.NORM[NACC.NORM$EDUC != 99,] # 5074
 
 attach(NACC.NORM)
 
@@ -40,16 +53,25 @@ by(NACC.NORM$EDUC, SEX, hist)
 #lower.outcome <- 0
 #upper.outcome <- 30
 
-## CRAFTVRS
+# CRAFTVRS
 outcome <- "CRAFTVRS"
 lower.outcome <- 0
 upper.outcome <- 44
 
-outcome.index <- (NACC.NORM[outcome] >= lower.outcome) & (NACC.NORM[outcome] <= upper.outcome) # 4474
+outcome.index <- (NACC.NORM[outcome] >= lower.outcome) & (NACC.NORM[outcome] <= upper.outcome) & (abs(NACC.NORM[outcome] - mean(NACC.NORM[, outcome])) <= 4 * sd(NACC.NORM[, outcome])) # 4474
+
 summary(NACC.NORM[outcome.index, outcome])
 sd(NACC.NORM[outcome.index, outcome])
 outcome.NORM <- hist(NACC.NORM[outcome.index, outcome], 20, xlim = c(lower.outcome, upper.outcome)) #skewed
 
+# unadjusted Z-score (naive mean)
+summary(outcome.unadjusted <- lm(as.formula(paste(outcome, "~ 1")), data = NACC.NORM, subset = outcome.index))
+
+# only adjust for AGE
+summary(outcome.age <- lm(as.formula(paste(outcome, "~ NACCAGE")), data = NACC.NORM, subset = outcome.index))
+
+# only adjust for EDUC
+summary(outcome.educ <- lm(as.formula(paste(outcome, "~ EDUC")), data = NACC.NORM, subset = outcome.index))
 
 # Multivariate Linear Regression
 by(NACC.NORM[outcome.index, outcome], NACC.NORM[outcome.index, 'SEX'], hist)
@@ -156,31 +178,47 @@ test <- function(outcome = outcome, valid.index = outcome.index, k = 10) {
 
 #-------------Z-score comparison-----------------------
 Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome, need.plot = TRUE, need.SD.model = FALSE) {
+    cat("Naive mean (without adjustment):", mean.naive <- mean(NACC.NORM[outcome.index, outcome]))
+    cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean((NACC.NORM[outcome.index, outcome] - predict(outcome.model)) ^ 2)), '\n')
+
     if (need.SD.model) {
         #-------------model of SD (heterogeneous SD)---------
         #summary(SD.model <- gam(res.abs ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.abs = abs(residuals(outcome.model)))))
-        summary(SD.model <- gam(res.squared ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.squared = residuals(outcome.model) ^ 2))) # or squared residuals?
+        summary(SD.model <- gam(res.squared ~ SEX + s(NACCAGE) + s(EDUC), data = cbind(NACC.NORM[outcome.index,], res.squared = (NACC.NORM[outcome.index, outcome] - predict(outcome.model)) ^ 2))) # or squared residuals?
         # when we use residuals from lm, the R-sq(adj) is 0.00917
         # when we use residuals from scam.1, the R-sq(adj) is 0.0046
 
 
         # SD model test
-        cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean(residuals(outcome.model) ^ 2)), '\n')
         cat(sqrt(predict(SD.model, newdata = data.frame(SEX = c(1, 0, 0), EDUC = c(30, 9, 20), NACCAGE = c(70, 65, 90)))), '\n')
 
         #----------Z-score----------------
         # use SD model.
-        Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
-            return((newdata[, outcome] - predict(outcome.model, newdata[, c("SEX", "NACCAGE", "EDUC")])) / sqrt(predict(SD.model, newdata[, c("SEX", "NACCAGE", "EDUC")])))
+        if ("scar" %in% class(outcome.model)) {
+            Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
+                return((newdata[, outcome] - predict(outcome.model, as.matrix(newdata[, c("SEX", "NACCAGE", "EDUC")]))) / sqrt(predict(SD.model, newdata[, c("SEX", "NACCAGE", "EDUC")])))
+            }
+        }
+        else {
+            Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
+                return((newdata[, outcome] - predict(outcome.model, newdata[, c("SEX", "NACCAGE", "EDUC")])) / sqrt(predict(SD.model, newdata[, c("SEX", "NACCAGE", "EDUC")])))
+            }
         }
     }
 
     else { #homogeneous SD is used
-        cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean(residuals(outcome.model) ^ 2)), '\n')
+        
         #----------Z-score----------------
         # use homogeneous SD.
-        Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
-            return((newdata[, outcome] - predict(outcome.model, newdata[, c("SEX", "NACCAGE", "EDUC")])) / SD.naive)
+        if ("scar" %in% class(outcome.model)) {
+            Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
+                return((newdata[, outcome] - predict(outcome.model, as.matrix(newdata[, c("SEX", "NACCAGE", "EDUC")]))) / SD.naive)
+            }
+        }
+        else {
+            Z_score <- function(outcome.model = outcome.model, outcome = outcome, newdata) {
+                return((newdata[, outcome] - predict(outcome.model, newdata[, c("SEX", "NACCAGE", "EDUC")])) / SD.naive)
+            }
         }
     }
 
@@ -213,34 +251,86 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
 
     #----------labeled Z-score--------------
     labeled.Z_score <- data.frame(label = c(rep('norm', length(NORM.Z_score)), rep('MCI', length(MCI.Z_score)), rep('dementia', length(Dementia.Z_score))), Z_score = c(NORM.Z_score, MCI.Z_score, Dementia.Z_score))
+
+    plot((c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome], NACC.Dementia[Dementia.outcome.index, outcome]) - mean.naive) / SD.naive,
+         labeled.Z_score$Z_score,
+         col = c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score)), rep(3, length(Dementia.Z_score))),
+         xlab = "naive Z-score (without adjustment, equiv to raw score)",
+         ylab = "adjusted Z-score",
+         main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
+    abline(a = 0, b = 1)
+    legend('bottomright', c('NORM', 'MCI', 'Dementia'), lty = rep(1, 3), col = c(1, 2, 3))
+
     return(labeled.Z_score)
 }
 
 #-------Binary Classification: ROC---------
 ROC <- function(labeled.Z_score.list, pos_label = 'MCI', neg_label = 'norm', leg.txt = c("monotone scam", "lm")) {
     i <- 0
+    #record = list()
     for (labeled.Z_score in labeled.Z_score.list) {
+
         i <- i + 1
         thres <- seq(-4, 4, length.out = 50)
         onevsone.index <- (labeled.Z_score['label'] == pos_label) | (labeled.Z_score['label'] == neg_label)
+        #s <- matrix(nrow = length(onevsone.index), ncol = 4)
+        #colnames(s) <- c('TP', 'TN', 'FP', 'FN')
+
+        #s[, 'TP'] <- vapply(thres, function(thres) {
+            #labeled.Z_score <- (labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)
+        #}, FUN.VALUE = 0)
+        #s[, 'TN'] <- vapply(thres, function(thres) {
+            #labeled.Z_score <- (labeled.Z_score[onevsone.index, 'label'] == neg_label) & (labeled.Z_score[onevsone.index, 'Z_score'] > thres)
+        #}, FUN.VALUE = 0)
+        #s[, 'FP'] <- vapply(thres, function(thres) {
+            #labeled.Z_score <- (labeled.Z_score[onevsone.index, 'label'] == neg_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)
+        #}, FUN.VALUE = 0)
+        #s[, 'FN'] <- vapply(thres, function(thres) {
+            #labeled.Z_score <- (labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] > thres)
+        #}, FUN.VALUE = 0)
+
+        #record <- append(record, s)
+
         TPR <- vapply(thres, function(thres) {
             sum((labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == pos_label)
         }, FUN.VALUE = 0)
+        #TPR <- sum(s[, 'TP']) / (sum(s[, 'TP']) + sum(s[, 'FN']))
         FPR <- vapply(thres, function(thres) {
             sum((labeled.Z_score[onevsone.index, 'label'] == neg_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == neg_label)
         }, FUN.VALUE = 0)
+        #FPR <- sum(s[, 'FP']) / (sum(s[, 'FP']) + sum(s[, 'TN']))
+
         if (i == 1) {
-            plot(FPR, TPR, type = "l",col=i, main = paste("pos:", pos_label, "neg:", neg_label))
+            plot(FPR, TPR, type = "l", lty = 2, col = i, main = paste("pos:", pos_label, "neg:", neg_label))
         }
         else {
             points(FPR, TPR, type = "l", col = i, lty = 2)
         }
     }
     legend("bottomright", leg.txt, col = 1:i, lty = rep(2, i))
+    #return(record)
 }
 
-ROC(list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE), Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE)), pos_label = 'MCI', neg_label = 'norm', leg.txt = c("monotone scam with naive SD", "monotone scam with adjusted SD", "lm with naive SD", "lm with adjusted SD"))
+#---------------compare MCI and norm---------------------
+ROC(
+    list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE),
+         #Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE),
+         Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE),
+         #Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE),
+         Z_score.comparison(outcome.unadjusted, outcome, need.plot = FALSE, need.SD.model = FALSE),
+         Z_score.comparison(outcome.age, outcome, need.plot = FALSE, need.SD.model = FALSE),
+         Z_score.comparison(outcome.educ, outcome, need.plot = FALSE, need.SD.model = FALSE)
+         ),
+         pos_label = 'MCI',
+         neg_label = 'norm',
+         leg.txt = c("alternative with naive SD", 
+                     #"alternative with adjusted SD",
+                     "lm with naive SD",
+                     #"lm with adjusted SD",
+                     "unadjusted Z-score",
+                     "adjusted for age only",
+                     "adjusted for educ only"
+                     ))
 
-ROC(list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE), Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE)), pos_label = 'dementia', neg_label = 'MCI', leg.txt = c("monotone scam with naive SD", "monotone scam with adjusted SD", "lm with naive SD", "lm with adjusted SD"))
-
-#ROC(4, 3)
+#----------------compare Dementia and MCI---------------------------
+#ROC(list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE), Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE)), pos_label = 'dementia', neg_label = 'MCI', leg.txt = c("alternative with naive SD", "alternative with adjusted SD", "lm with naive SD", "lm with adjusted SD"))
