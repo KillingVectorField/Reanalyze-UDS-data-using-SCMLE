@@ -178,7 +178,7 @@ test <- function(outcome = outcome, valid.index = outcome.index, k = 10) {
 
 #-------------Z-score comparison-----------------------
 Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome, need.plot = TRUE, need.SD.model = FALSE) {
-    cat("Naive mean (without adjustment):", mean.naive <- mean(NACC.NORM[outcome.index, outcome]))
+    cat("Naive mean (without adjustment):", mean.naive <- mean(NACC.NORM[outcome.index, outcome]), '\n')
     cat("Naive (homogenenous) SD:", SD.naive <- sqrt(mean((NACC.NORM[outcome.index, outcome] - predict(outcome.model)) ^ 2)), '\n')
 
     if (need.SD.model) {
@@ -252,6 +252,8 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
     #----------labeled Z-score--------------
     labeled.Z_score <- data.frame(label = c(rep('norm', length(NORM.Z_score)), rep('MCI', length(MCI.Z_score)), rep('dementia', length(Dementia.Z_score))), Z_score = c(NORM.Z_score, MCI.Z_score, Dementia.Z_score))
 
+    #----------Z-score versus raw score-------------
+    #----------colored according to different (NORM/MCI/dementia) group----------
     plot((c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome], NACC.Dementia[Dementia.outcome.index, outcome]) - mean.naive) / SD.naive,
          labeled.Z_score$Z_score,
          col = c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score)), rep(3, length(Dementia.Z_score))),
@@ -260,6 +262,23 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
          main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
     abline(a = 0, b = 1)
     legend('bottomright', c('NORM', 'MCI', 'Dementia'), lty = rep(1, 3), col = c(1, 2, 3))
+
+    #----------shaped (pch) according to correct/wrong classification---------
+    thres <- (median(NORM.Z_score) + median(MCI.Z_score)) / 2
+    pch <- rep(1, length(NORM.Z_score) + length(MCI.Z_score))
+    # denote wrong classifications as pch=2
+    error.index <- ((labeled.Z_score$label == "norm") & (labeled.Z_score$Z_score < thres)) | ((labeled.Z_score$label == "MCI") & (labeled.Z_score$Z_score > thres))
+    cat("error rate:", sum(error.index) / (length(NORM.Z_score) + length(MCI.Z_score)), '\n')
+    pch[error.index] <- 2
+    plot((c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome]) - mean.naive) / SD.naive,
+         labeled.Z_score$Z_score[(labeled.Z_score$label == "norm") | (labeled.Z_score$label == "MCI")],
+         col = c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score))),
+         pch = pch,
+         xlab = "naive Z-score (without adjustment, equiv to raw score)",
+         ylab = "adjusted Z-score",
+         main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
+    abline(a = 0, b = 1)
+    legend('bottomright', c('NORM', 'MCI'), lty = rep(1, 2), col = c(1, 2))
 
     return(labeled.Z_score)
 }
