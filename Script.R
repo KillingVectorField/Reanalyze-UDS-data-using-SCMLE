@@ -227,13 +227,13 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
 
     #-------------MCI-------------
     NACC.MCI <- NACC.uniqueID[NACC.uniqueID$NACCUDSD == 3,] # 1992
-    NACC.MCI <- with(NACC.MCI, NACC.MCI[(NACCAGEB >= 45) & (EDUC != 99),]) #1960
+    NACC.MCI <- NACC.MCI[NACC.MCI$NACCAGE >= 45,] #1960
     MCI.outcome.index <- (NACC.MCI[outcome] >= lower.outcome) & (NACC.MCI[outcome] <= upper.outcome)
     MCI.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.MCI[MCI.outcome.index,])
 
     #------------Dementia------------
     NACC.Dementia <- NACC.uniqueID[NACC.uniqueID$NACCUDSD == 4,] # 2898
-    NACC.Dementia <- with(NACC.Dementia, NACC.Dementia[(NACCAGEB >= 45) & (EDUC != 99),]) #2832
+    NACC.Dementia <- NACC.Dementia[NACC.Dementia$NACCAGE >= 45,] #2832
     Dementia.outcome.index <- (NACC.Dementia[outcome] >= lower.outcome) & (NACC.Dementia[outcome] <= upper.outcome)
     Dementia.Z_score <- Z_score(outcome.model = outcome.model, outcome = outcome, newdata = NACC.Dementia[Dementia.outcome.index,])
     
@@ -252,64 +252,65 @@ Z_score.comparison <- function(outcome.model = outcome.scam.1, outcome = outcome
     #----------labeled Z-score--------------
     labeled.Z_score <- data.frame(label = c(rep('norm', length(NORM.Z_score)), rep('MCI', length(MCI.Z_score)), rep('dementia', length(Dementia.Z_score))), Z_score = c(NORM.Z_score, MCI.Z_score, Dementia.Z_score))
 
-    #----------Z-score versus raw score-------------
-    x <- (c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome], NACC.Dementia[Dementia.outcome.index, outcome]) - mean.naive) / SD.naive
-    y <- labeled.Z_score$Z_score
-    #----------colored according to different (NORM/MCI/dementia) group----------
-    #col <- c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score)), rep(3, length(Dementia.Z_score)))
-    col <- c(rgb(0, 0, 0, alpha = NACC.NORM[outcome.index, "EDUC"] / 22),
-             rgb(1, 0, 0, alpha = NACC.MCI[MCI.outcome.index, "EDUC"] / 22),
-             rgb(0, 1, 0, alpha = NACC.Dementia[Dementia.outcome.index, "EDUC"] / 22))
-    #----------point size according to age----------
-    cex <- rep(1, length(NORM.Z_score) + length(MCI.Z_score) + length(Dementia.Z_score))
-    cex[1:(length(NORM.Z_score))] <- NACC.NORM[outcome.index, "NACCAGE"] / 70
-    cex[(length(NORM.Z_score)+1):(length(NORM.Z_score)+length(MCI.Z_score))] <- NACC.MCI[MCI.outcome.index, "NACCAGE"] / 70
-    cex[(length(NORM.Z_score) + length(MCI.Z_score) + 1):length(cex)] <- NACC.Dementia[Dementia.outcome.index, "NACCAGE"] / 70
+    ##----------Z-score versus raw score-------------
+    #x <- (c(NACC.NORM[outcome.index, outcome], NACC.MCI[MCI.outcome.index, outcome], NACC.Dementia[Dementia.outcome.index, outcome]) - mean.naive) / SD.naive
+    #y <- labeled.Z_score$Z_score
+    ##----------colored according to different (NORM/MCI/dementia) group----------
+    ##col <- c(rep(1, length(NORM.Z_score)), rep(2, length(MCI.Z_score)), rep(3, length(Dementia.Z_score)))
+    #col <- c(rgb(0, 0, 0, alpha = NACC.NORM[outcome.index, "EDUC"] / 22),
+             #rgb(1, 0, 0, alpha = NACC.MCI[MCI.outcome.index, "EDUC"] / 22),
+             #rgb(0, 1, 0, alpha = NACC.Dementia[Dementia.outcome.index, "EDUC"] / 22))
+    ##----------point size according to age----------
+    #cex <- rep(1, length(NORM.Z_score) + length(MCI.Z_score) + length(Dementia.Z_score))
+    #cex[1:(length(NORM.Z_score))] <- NACC.NORM[outcome.index, "NACCAGE"] / 70
+    #cex[(length(NORM.Z_score)+1):(length(NORM.Z_score)+length(MCI.Z_score))] <- NACC.MCI[MCI.outcome.index, "NACCAGE"] / 70
+    #cex[(length(NORM.Z_score) + length(MCI.Z_score) + 1):length(cex)] <- NACC.Dementia[Dementia.outcome.index, "NACCAGE"] / 70
 
-    plot(x,
-         y,
-         col = col,
-         cex = cex,
-         xlab = "naive Z-score (without adjustment, equiv to raw score)",
-         ylab = "adjusted Z-score",
-         main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
-    abline(a = 0, b = 1)
-    legend('bottomright', c('NORM', 'MCI', 'Dementia'), lty = rep(1, 3), col = c(1, 2, 3))
+    #plot(x,
+         #y,
+         #col = col,
+         #cex = cex,
+         #xlab = "naive Z-score (without adjustment, equiv to raw score)",
+         #ylab = "adjusted Z-score",
+         #main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
+    #abline(a = 0, b = 1)
+    #legend('bottomright', c('NORM', 'MCI', 'Dementia'), lty = rep(1, 3), col = c(1, 2, 3))
 
-    #----------shaped (pch) according to correct/wrong classification---------
-    thres <- (median(NORM.Z_score) + median(MCI.Z_score)) / 2
-    pch <- rep(1, length(NORM.Z_score) + length(MCI.Z_score))
-    error.index <- ((labeled.Z_score$label == "norm") & (labeled.Z_score$Z_score < thres)) | ((labeled.Z_score$label == "MCI") & (labeled.Z_score$Z_score > thres))
-    cat("error rate:", sum(error.index) / (length(NORM.Z_score) + length(MCI.Z_score)), '\n')
-    pch[error.index] <- 2 # denote wrong classifications as pch=2
+    ##----------shaped (pch) according to correct/wrong classification---------
+    #thres <- (median(NORM.Z_score) + median(MCI.Z_score)) / 2
+    #pch <- rep(1, length(NORM.Z_score) + length(MCI.Z_score))
+    #error.index <- ((labeled.Z_score$label == "norm") & (labeled.Z_score$Z_score < thres)) | ((labeled.Z_score$label == "MCI") & (labeled.Z_score$Z_score > thres))
+    #cat("error rate:", sum(error.index) / (length(NORM.Z_score) + length(MCI.Z_score)), '\n')
+    #pch[error.index] <- 2 # denote wrong classifications as pch=2
     
-    NORM.and.MCI <- 1:(length(NORM.Z_score) + length(MCI.Z_score))
+    #NORM.and.MCI <- 1:(length(NORM.Z_score) + length(MCI.Z_score))
 
-    plot(x[NORM.and.MCI],
-         y[NORM.and.MCI],
-         col = col[NORM.and.MCI],
-         pch = pch,
-         cex = cex[NORM.and.MCI],
-         xlab = "naive Z-score (without adjustment, equiv to raw score)",
-         ylab = "adjusted Z-score",
-         main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
-    abline(a = 0, b = 1)
-    legend('bottomright', c('NORM', 'MCI'), lty = rep(1, 2), col = c(1, 2))
+    #plot(x[NORM.and.MCI],
+         #y[NORM.and.MCI],
+         #col = col[NORM.and.MCI],
+         #pch = pch,
+         #cex = cex[NORM.and.MCI],
+         #xlab = "naive Z-score (without adjustment, equiv to raw score)",
+         #ylab = "adjusted Z-score",
+         #main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
+    #abline(a = 0, b = 1)
+    #legend('bottomright', c('NORM', 'MCI'), lty = rep(1, 2), col = c(1, 2))
 
-    plot((x[NORM.and.MCI])[error.index],
-         (y[NORM.and.MCI])[error.index],
-         col = (col[NORM.and.MCI])[error.index],
-         pch = 2,
-         cex = (cex[NORM.and.MCI])[error.index],
-         xlab = "naive Z-score (without adjustment, equiv to raw score)",
-         ylab = "adjusted Z-score",
-         main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
-    abline(a = 0, b = 1)
-    legend('bottomright', c('NORM', 'MCI'), lty = rep(1, 2), col = c(1, 2))
+    #plot((x[NORM.and.MCI])[error.index],
+         #(y[NORM.and.MCI])[error.index],
+         #col = (col[NORM.and.MCI])[error.index],
+         #pch = 2,
+         #cex = (cex[NORM.and.MCI])[error.index],
+         #xlab = "naive Z-score (without adjustment, equiv to raw score)",
+         #ylab = "adjusted Z-score",
+         #main = paste(class(outcome.model), paste(colnames(outcome.model$model), collapse = ',')))
+    #abline(a = 0, b = 1)
+    #legend('bottomright', c('NORM', 'MCI'), lty = rep(1, 2), col = c(1, 2))
 
     return(labeled.Z_score)
 }
 
+require(pROC)
 #-------Binary Classification: ROC---------
 ROC <- function(labeled.Z_score.list, pos_label = 'MCI', neg_label = 'norm', leg.txt = c("monotone scam", "lm")) {
     i <- 0
@@ -321,6 +322,11 @@ ROC <- function(labeled.Z_score.list, pos_label = 'MCI', neg_label = 'norm', leg
         onevsone.index <- (labeled.Z_score['label'] == pos_label) | (labeled.Z_score['label'] == neg_label)
         #s <- matrix(nrow = length(onevsone.index), ncol = 4)
         #colnames(s) <- c('TP', 'TN', 'FP', 'FN')
+
+        
+        ROC <- roc(label ~ Z_score, labeled.Z_score[onevsone.index,], levels = c(pos_label, neg_label), auc = TRUE, plot = FALSE, ci = TRUE)
+        print(ROC$ci)
+        leg.txt[[i]] <- paste(leg.txt[[i]], round(as.numeric(ROC$auc),4))
 
         #s[, 'TP'] <- vapply(thres, function(thres) {
             #labeled.Z_score <- (labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)
@@ -337,20 +343,20 @@ ROC <- function(labeled.Z_score.list, pos_label = 'MCI', neg_label = 'norm', leg
 
         #record <- append(record, s)
 
-        TPR <- vapply(thres, function(thres) {
-            sum((labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == pos_label)
-        }, FUN.VALUE = 0)
-        #TPR <- sum(s[, 'TP']) / (sum(s[, 'TP']) + sum(s[, 'FN']))
-        FPR <- vapply(thres, function(thres) {
-            sum((labeled.Z_score[onevsone.index, 'label'] == neg_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == neg_label)
-        }, FUN.VALUE = 0)
-        #FPR <- sum(s[, 'FP']) / (sum(s[, 'FP']) + sum(s[, 'TN']))
+        #TPR <- vapply(thres, function(thres) {
+            #sum((labeled.Z_score[onevsone.index, 'label'] == pos_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == pos_label)
+        #}, FUN.VALUE = 0)
+        ##TPR <- sum(s[, 'TP']) / (sum(s[, 'TP']) + sum(s[, 'FN']))
+        #FPR <- vapply(thres, function(thres) {
+            #sum((labeled.Z_score[onevsone.index, 'label'] == neg_label) & (labeled.Z_score[onevsone.index, 'Z_score'] < thres)) / sum(labeled.Z_score[onevsone.index, 'label'] == neg_label)
+        #}, FUN.VALUE = 0)
+        ##FPR <- sum(s[, 'FP']) / (sum(s[, 'FP']) + sum(s[, 'TN']))
 
         if (i == 1) {
-            plot(FPR, TPR, type = "l", lty = 2, col = i, main = paste("pos:", pos_label, "neg:", neg_label))
+            plot(1 - ROC$speci, ROC$sensi, type = "l", lty = 2, col = i, main = paste("pos:", pos_label, "neg:", neg_label))
         }
         else {
-            points(FPR, TPR, type = "l", col = i, lty = 2)
+            points(1 - ROC$speci, ROC$sensi, type = "l", col = i, lty = 2)
         }
     }
     legend("bottomright", leg.txt, col = 1:i, lty = rep(2, i))
@@ -358,25 +364,25 @@ ROC <- function(labeled.Z_score.list, pos_label = 'MCI', neg_label = 'norm', leg
 }
 
 #---------------compare MCI and norm---------------------
-ROC(
-    list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE),
-         #Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE),
-         Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE),
-         #Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE),
-         Z_score.comparison(outcome.unadjusted, outcome, need.plot = FALSE, need.SD.model = FALSE),
-         Z_score.comparison(outcome.age, outcome, need.plot = FALSE, need.SD.model = FALSE),
-         Z_score.comparison(outcome.educ, outcome, need.plot = FALSE, need.SD.model = FALSE)
-         ),
-         pos_label = 'MCI',
-         neg_label = 'norm',
-         leg.txt = c("alternative with naive SD", 
-                     #"alternative with adjusted SD",
-                     "lm with naive SD",
-                     #"lm with adjusted SD",
-                     "unadjusted Z-score",
-                     "adjusted for age only",
-                     "adjusted for educ only"
-                     ))
+Z_score.list <- list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE),
+                     #Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE),
+                     Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE),
+                     #Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE),
+                     Z_score.comparison(outcome.unadjusted, outcome, need.plot = FALSE, need.SD.model = FALSE),
+                     Z_score.comparison(outcome.age, outcome, need.plot = FALSE, need.SD.model = FALSE),
+                     Z_score.comparison(outcome.educ, outcome, need.plot = FALSE, need.SD.model = FALSE))
+ROC(Z_score.list,
+    pos_label = 'MCI',
+    neg_label = 'norm',
+    leg.txt = c("alternative with naive SD",
+                #"alternative with adjusted SD",
+                "lm with naive SD",
+                #"lm with adjusted SD",
+                "unadjusted Z-score",
+                "adjusted for age only",
+                "adjusted for educ only"
+                ))
 
 #----------------compare Dementia and MCI---------------------------
 #ROC(list(Z_score.comparison(outcome.scam.1, outcome, need.plot = TRUE, need.SD.model = FALSE), Z_score.comparison(outcome.scam.1, outcome, need.plot = FALSE, need.SD.model = TRUE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = FALSE), Z_score.comparison(outcome.lm, outcome, need.plot = FALSE, need.SD.model = TRUE)), pos_label = 'dementia', neg_label = 'MCI', leg.txt = c("alternative with naive SD", "alternative with adjusted SD", "lm with naive SD", "lm with adjusted SD"))
+
